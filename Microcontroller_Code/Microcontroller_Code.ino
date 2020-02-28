@@ -19,7 +19,7 @@ void loop() {
 void set_motor(bool motor_name, int motor_speed) {
   motor_speed = constrain(motor_speed, -255, 255);
   if (motor_name) {
-    // left motor
+    // left motors
     if (motor_speed > 0) { // forward
       digitalWrite(motor_1_A, LOW);
       analogWrite(motor_1_B, abs(motor_speed));
@@ -34,7 +34,7 @@ void set_motor(bool motor_name, int motor_speed) {
     }
   }
   else {
-    // right motor
+    // right motors
     if (motor_speed > 0) { // forward
       digitalWrite(motor_2_A, LOW);
       analogWrite(motor_2_B, abs(motor_speed));
