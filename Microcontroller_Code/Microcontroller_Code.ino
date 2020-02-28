@@ -17,6 +17,7 @@ void loop() {
 }
 
 void set_motor(bool motor_name, int motor_speed) {
+  motor_speed = constrain(motor_speed, -255, 255);
   if (motor_name) {
     // left motor
     if (motor_speed > 0) { // forward
