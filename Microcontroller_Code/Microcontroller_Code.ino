@@ -4,17 +4,28 @@
 #define motor_2_A 7
 #define motor_2_B 8
 
+// Input pins (from RPi)
+#define DIG_IN_0 0
+#define DIG_IN_1 1
+#define PWM_IN 2
+
+// Input from voltage divider
+#define battery_pin A4
+
+float bat_voltage;
+
 void setup() {
   // set motor pins as output
   pinMode(motor_1_A, OUTPUT);
   pinMode(motor_1_B, OUTPUT);
   pinMode(motor_2_A, OUTPUT);
   pinMode(motor_2_B, OUTPUT);
-} // end of setup method
+} // end of method setup
 
 void loop() {
-
-} // end of loop method
+  // this is the formula to read the battery pack voltage
+  bat_voltage = analogRead(battery_pin) * 3.3 / 1024 * 2;
+} // end of method loop
 
 void set_motor(bool motor_name, int motor_speed) {
   motor_speed = constrain(motor_speed, -255, 255);
@@ -48,4 +59,4 @@ void set_motor(bool motor_name, int motor_speed) {
       digitalWrite(motor_2_B, LOW);
     }
   }
-} // end of set_motor method
+} // end of method set_motor
