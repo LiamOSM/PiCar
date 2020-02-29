@@ -10,11 +10,11 @@ void setup() {
   pinMode(motor_1_B, OUTPUT);
   pinMode(motor_2_A, OUTPUT);
   pinMode(motor_2_B, OUTPUT);
-}
+} // end of setup method
 
 void loop() {
 
-}
+} // end of loop method
 
 void set_motor(bool motor_name, int motor_speed) {
   motor_speed = constrain(motor_speed, -255, 255);
@@ -48,4 +48,4 @@ void set_motor(bool motor_name, int motor_speed) {
       digitalWrite(motor_2_B, LOW);
     }
   }
-}
+} // end of set_motor method
