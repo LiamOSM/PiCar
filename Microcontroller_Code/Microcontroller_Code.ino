@@ -59,4 +59,4 @@ void set_motor(bool motor_name, int motor_speed) {
       digitalWrite(motor_2_B, LOW);
     }
   }
-} // end of method set_motor
+} // end of method set_motor fuck!
