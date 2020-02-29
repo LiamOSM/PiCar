@@ -1,20 +1,17 @@
 Process
 --------
+Source-code by [David Tian](https://towardsdatascience.com/deeppicar-part-4-lane-following-via-opencv-737dd9e47c96)
+1. input frame
+2. blue-color filter
+3. Canny Edge Detector
+4. Hough Line Transform
+5. Derive lane-lines
+6. Draw heading
 
-Input-image
-![input](images/test.png)
 
-Get blue pixels of frame
-![blue image-edges](blue_mask.png)
-
-Get edges
-![blue edges](edges.png)
-
-Get line-segments with Hough Line Transform
-![line segments](line_segments.png)
-
-Derive lane-lines from line-segments
-![lane-lines](lane_lines.png)
-
-Final image with heading
-![output](final.png)
+![](images/test.PNG)
+![](images/blue_mask.PNG)
+![](images/edges.PNG)
+![](images/line_segments.PNG)
+![](images/lane_lines.PNG)
+![](images/final.PNG)
