@@ -8,7 +8,7 @@ import math
 import datetime
 import sys
 import cv2
-_SHOW_IMAGE = False # set TRUE *only* when testing on images
+_SHOW_IMAGE = True # set TRUE *only* when testing on images
 
 class HandCodedLaneFollower(object):
     
@@ -314,6 +314,6 @@ def test_video(video_file):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     #test_video('/home/pi/DeepPiCar/driver/data/tmp/video01')
-    test_photo('test.png')
+    test_photo('images/test.png')
     #test_photo(sys.argv[1])
     #test_video(sys.argv[1])
