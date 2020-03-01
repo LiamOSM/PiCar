@@ -7,7 +7,7 @@
 // Input pins (from RPi)
 #define DIG_IN_0 0
 #define DIG_IN_1 1
-#define PWM_IN A2
+#define PWM_IN 2
 
 // Input from voltage divider
 #define battery_pin A4
@@ -25,25 +25,6 @@ void setup() {
 void loop() {
   // this is the formula to read the battery pack voltage
   bat_voltage = analogRead(battery_pin) * 3.3 / 1024 * 2;
-  if (bat_voltage < 4) {
-    set_motor(0, 0);
-    set_motor(1, 0);
-  }
-  else {
-    // car driving
-    if (DIG_IN_0) {
-      set_motor(0, PWM_IN);
-    }
-    else {
-      set_motor(0, PWM_IN*-1);
-    }
-    if (DIG_IN_1) {
-      set_motor(1, PWM_IN);
-    }
-    else {
-      set_motor(1, PWM_IN*-1);
-    }
-  }
 } // end of method loop
 
 void set_motor(bool motor_name, int motor_speed) {
