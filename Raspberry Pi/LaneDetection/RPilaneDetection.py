@@ -8,32 +8,35 @@ import math
 import datetime
 import sys
 import cv2
-_SHOW_IMAGE = True # set TRUE *only* when testing on images
+_SHOW_IMAGE = False # set TRUE *only* when testing on images
 
 class HandCodedLaneFollower(object):
     
-    # constructor
+    # CONSTRUCTOR
     def __init__(self, car=None):
         logging.info('Creating a HandCodedLaneFollower...')
         self.car = car
         self.curr_steering_angle = 90
 
+    # FINDS & PROCESSES LANE-LINES
     def follow_lane(self, frame):
         # Main entry point of the lane follower
         show_image("orig", frame)
-        lane_lines, frame = detect_lane(frame)
-        final_frame = self.steer(frame, lane_lines)
+        lane_lines_arr, frame = detect_lane(frame)
+        final_frame = self.steer(frame, lane_lines_arr)
         return final_frame
-
-    def steer(self, frame, lane_lines):
+    
+    # COMPUTES STEERING DIRECTION
+    def steer(self, frame, lane_lines_arr):
         logging.debug('steering...')
-        if len(lane_lines) == 0:
+        if len(lane_lines_arr) == 0:
             logging.error('No lane lines detected, nothing to do.')
             return frame
-
-        new_steering_angle = compute_steering_angle(frame, lane_lines)
-        self.curr_steering_angle = stabilize_steering_angle(self.curr_steering_angle, new_steering_angle, len(lane_lines))
-
+            
+        new_steering_angle = compute_steering_angle(frame, lane_lines_arr)
+        self.curr_steering_angle = stabilize_steering_angle(self.curr_steering_angle, new_steering_angle, len(lane_lines_arr))
+        
+        # Send steering-signal to Arduino
         if self.car is not None:
             self.car.front_wheels.turn(self.curr_steering_angle)
         curr_heading_image = display_heading_line(frame, self.curr_steering_angle)
@@ -46,33 +49,30 @@ class HandCodedLaneFollower(object):
 # Frame processing steps
 ############################
 
-'''Control-path for LANE-DETECTION'''
+'''LANE-DETECTION MASTER'''
 def detect_lane(frame):
     logging.debug('detecting lane lines...')
-    # filter out non-blue pixels & identify remaining edges
+    # EDGE DETECTION
     edges = detect_edges(frame)
     show_image('edges', edges)
-    # remove top-half of frame 
+    # REMOVE IRRELEVANCIES
     cropped_edges = region_of_interest(edges)
     show_image('edges cropped', cropped_edges)
-    # detect all line-segments
-    line_segments = detect_line_segments(cropped_edges)
-    line_segment_image = display_lines(frame, line_segments)
+    # LINE-DETECTION
+    line_segments_arr = detect_line_segments(cropped_edges)
+    line_segment_image = display_lines(frame, line_segments_arr)
     show_image("line segments", line_segment_image)
-    # identify & draw lane-lines
-    lane_lines = average_slope_intercept(frame, line_segments)
-    lane_lines_image = display_lines(frame, lane_lines)
+    # LANE-LINE CONSTRUCTION
+    lane_lines_arr = average_slope_intercept(frame, line_segments_arr)
+    lane_lines_image = display_lines(frame, lane_lines_arr)
     show_image("lane lines", lane_lines_image)
-    return lane_lines, lane_lines_image
+    return lane_lines_arr, lane_lines_image
 
-# blue lane-lines are used by the obstacle-course
 def detect_edges(frame):
-    # filter out all non-blue pixles in image
+    # only check pixels that're the color of lane-lines
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     show_image("hsv", hsv)
-    lower_blue_hue = np.array([30, 40, 0])
-    upper_blue_hue = np.array([150, 255, 255])
-    mask = cv2.inRange(hsv, lower_blue_hue, upper_blue_hue)
+    mask = cv2.inRange(hsv, np.array([30, 40, 0]) , np.array([150, 255, 255]))
     # detect the remaining edges in the image, including lane-lines
     edges = cv2.Canny(mask, 200, 400)
     show_image("blue mask", mask)
@@ -97,83 +97,98 @@ def region_of_interest(canny):
 
 # find LINES in frame
 def detect_line_segments(cropped_edges):
+    '''
+    No mask will cleanly identify the 2 lane-lines. 
+    Instead, the mask detects a multiple lane-segments for each lane.
+    '''
     # tuning min_threshold, minLineLength, maxLineGap is a trial and error process by hand
     rho = 1  # precision in pixel, i.e. 1 pixel
     angle = np.pi / 180  # degree in radian, i.e. 1 degree
     min_threshold = 10  # minimal of votes
-    line_segments = cv2.HoughLinesP(cropped_edges, rho, angle, min_threshold, np.array([]), minLineLength=8,
+    line_segments_arr = cv2.HoughLinesP(cropped_edges, rho, angle, min_threshold, np.array([]), minLineLength=8,
                                     maxLineGap=4)
-    if line_segments is not None:
-        for line_segment in line_segments:
+    if line_segments_arr is not None:
+        for line_segment in line_segments_arr:
             logging.debug('detected line_segment:')
             logging.debug("%s of length %s" % (line_segment, length_of_line_segment(line_segment[0])))
-    return line_segments
+    return line_segments_arr
 
 # derive LANE-LINES from identified line-segments
-def average_slope_intercept(frame, line_segments):
+def average_slope_intercept(frame, line_segments_arr):
     """
-    This function combines line segments into one or two lane lines
+    This function combines line-segments into one or two lane lines
     If all line slopes are < 0: then we only have detected left lane
     If all line slopes are > 0: then we only have detected right lane
     """
-    lane_lines = []
-    if line_segments is None:
+    lane_lines_arr = []
+    if line_segments_arr is None:
         logging.info('No line_segment segments detected')
-        return lane_lines
+        return lane_lines_arr
 
     height, width, _ = frame.shape
-    left_fit = []
-    right_fit = []
-
+    left_fit_segments = []      # create L-lane from scattered segments (see image in README.md)
+    right_fit_segments = []     # create R-lane from scattered segments
+                                # (the line in the middle is artificially generated later on)
+                            
+    # constrain detection of L & R lanes
     boundary = 1/3
-    left_region_boundary = width * (1 - boundary)  # left lane line segment should be on left 2/3 of the screen
-    right_region_boundary = width * boundary # right lane line segment should be on right 2/3 of the screen
+    left_region_boundary = width * (1 - boundary)  # L lane-line is on left 2/3 of screen
+    right_region_boundary = width * boundary       # R lane line is right 2/3 (the area outside this bound)
 
-    for line_segment in line_segments:
-        for x1, y1, x2, y2 in line_segment:
+    # use SLOPE to differentite L&R lane-segments
+    for line_segment in line_segments_arr:
+        for x1, y1, x2, y2 in line_segment:        
             if x1 == x2:
                 logging.info('skipping vertical line segment (slope=inf): %s' % line_segment)
                 continue
             fit = np.polyfit((x1, x2), (y1, y2), 1)
             slope = fit[0]
             intercept = fit[1]
+            # left lane
             if slope < 0:
                 if x1 < left_region_boundary and x2 < left_region_boundary:
-                    left_fit.append((slope, intercept))
+                    left_fit_segments.append((slope, intercept))
+            # right lane
             else:
                 if x1 > right_region_boundary and x2 > right_region_boundary:
-                    right_fit.append((slope, intercept))
+                    right_fit_segments.append((slope, intercept))
+   
+    # construct lanes
+    left_fit_average = np.average(left_fit_segments, axis=0)
+    if len(left_fit_segments) > 0:
+        lane_lines_arr.append(make_points(frame, left_fit_average))
 
-    left_fit_average = np.average(left_fit, axis=0)
-    if len(left_fit) > 0:
-        lane_lines.append(make_points(frame, left_fit_average))
+    right_fit_average = np.average(right_fit_segments, axis=0)
+    if len(right_fit_segments) > 0:
+        lane_lines_arr.append(make_points(frame, right_fit_average))
 
-    right_fit_average = np.average(right_fit, axis=0)
-    if len(right_fit) > 0:
-        lane_lines.append(make_points(frame, right_fit_average))
+    logging.debug('lane lines: %s' % lane_lines_arr)  # [[[316, 720, 484, 432]], [[1009, 720, 718, 432]]]
 
-    logging.debug('lane lines: %s' % lane_lines)  # [[[316, 720, 484, 432]], [[1009, 720, 718, 432]]]
-
-    return lane_lines
+    return lane_lines_arr
 
 
 ''' Steering Functionality '''
-def compute_steering_angle(frame, lane_lines):
+def compute_steering_angle(frame, lane_lines_arr):
     """ Find the steering angle based on lane line coordinate
-        We assume that camera is calibrated to point to dead center
+    
+    
+    
+        **************** We assume that camera is calibrated to point to dead center ****************
+    
+    
     """
-    if len(lane_lines) == 0:
-        logging.info('No lane lines detected, do nothing')
+    if len(lane_lines_arr) == 0:
+        logging.info('No lane lines detected')
         return -90
 
     height, width, _ = frame.shape
-    if len(lane_lines) == 1:
-        logging.debug('Only detected one lane line, just follow it. %s' % lane_lines[0])
-        x1, _, x2, _ = lane_lines[0][0]
+    if len(lane_lines_arr) == 1:
+        logging.debug('Only detected one lane line, just follow it. %s' % lane_lines_arr[0])
+        x1, _, x2, _ = lane_lines_arr[0][0]
         x_offset = x2 - x1
     else:
-        _, _, left_x2, _ = lane_lines[0][0]
-        _, _, right_x2, _ = lane_lines[1][0]
+        _, _, left_x2, _ = lane_lines_arr[0][0]
+        _, _, right_x2, _ = lane_lines_arr[1][0]
         camera_mid_offset_percent = 0.02 # 0.0 means car pointing to center, -0.03: car is centered to left, +0.03 means car pointing to right
         mid = int(width / 2 * (1 + camera_mid_offset_percent))
         x_offset = (left_x2 + right_x2) / 2 - mid
@@ -281,7 +296,8 @@ def test_photo(file):
 
 def test_video(video_file):
     lane_follower = HandCodedLaneFollower()
-    cap = cv2.VideoCapture(video_file + '.avi')
+    # cap = cv2.VideoCapture(video_file + '.avi')
+    cap = cv2.VideoCapture(0)
 
     # skip first second of video.
     for i in range(3):
@@ -313,7 +329,7 @@ def test_video(video_file):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    #test_video('/home/pi/DeepPiCar/driver/data/tmp/video01')
-    test_photo('images/test.png')
+    test_video('/home/pi/DeepPiCar/driver/data/tmp/video01')
+    # test_photo('images/test.png')
     #test_photo(sys.argv[1])
     #test_video(sys.argv[1])
