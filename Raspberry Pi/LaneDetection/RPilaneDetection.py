@@ -1,6 +1,12 @@
 '''
-source: 
-https://github.com/dctian/DeepPiCar/blob/master/driver/code/hand_coded_lane_follower.py
+SPEED TEST
+---------
+- Dell XPS 13: 
+    - 20 fps with native webcam res 
+    - 18 fps with enforced 640x420 res
+
+- Raspberry Pi:  
+
 '''
 import numpy as np
 import logging
@@ -8,7 +14,10 @@ import math
 import datetime
 import sys
 import cv2
-_SHOW_IMAGE = False # set TRUE *only* when testing on images
+import time
+
+_SHOW_IMAGE = False
+_ENFORCE_RESOLUTION = True
 
 class HandCodedLaneFollower(object):
     
@@ -171,10 +180,7 @@ def average_slope_intercept(frame, line_segments_arr):
 def compute_steering_angle(frame, lane_lines_arr):
     """ Find the steering angle based on lane line coordinate
     
-    
-    
         **************** We assume that camera is calibrated to point to dead center ****************
-    
     
     """
     if len(lane_lines_arr) == 0:
@@ -281,7 +287,6 @@ def make_points(frame, line):
     x2 = max(-width, min(2 * width, int((y2 - intercept) / slope)))
     return [[x1, y1, x2, y2]]
 
-
 ############################
 # Test Functions
 ############################
@@ -298,6 +303,11 @@ def test_video(video_file):
     lane_follower = HandCodedLaneFollower()
     # cap = cv2.VideoCapture(video_file + '.avi')
     cap = cv2.VideoCapture(0)
+    
+    # lower RESOLUTION for faster processing [https://picamera.readthedocs.io/en/release-1.12/fov.html]
+    if _ENFORCE_RESOLUTION:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,640);
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT,480);
 
     # skip first second of video.
     for i in range(3):
@@ -305,21 +315,30 @@ def test_video(video_file):
 
     video_type = cv2.VideoWriter_fourcc(*'XVID')
     video_overlay = cv2.VideoWriter("%s_overlay.avi" % (video_file), video_type, 20.0, (320, 240))
+
+    # make a timer for FPS computation
+    start = time.time()
+    end = 0
     try:
         i = 0
         while cap.isOpened():
             _, frame = cap.read()
             print('frame %s' % i )
             combo_image= lane_follower.follow_lane(frame)
-            
             cv2.imwrite("%s_%03d_%03d.png" % (video_file, i, lane_follower.curr_steering_angle), frame)
-            
             cv2.imwrite("%s_overlay_%03d.png" % (video_file, i), combo_image)
             video_overlay.write(combo_image)
             cv2.imshow("Road with Lane line", combo_image)
-
             i += 1
+
+            # press 'q' to quit
             if cv2.waitKey(1) & 0xFF == ord('q'):
+                # print overall FPS
+                end = time.time()
+                elapsedSeconds = end - start
+                print("Time taken : {0} seconds".format(elapsedSeconds))
+                fps = i/elapsedSeconds
+                print("Estimated FPS: {0}".format(fps))
                 break
     finally:
         cap.release()
