@@ -4,9 +4,7 @@ SPEED TEST
 - Dell XPS 13: 
     - 20 fps with native webcam res 
     - 18 fps with enforced 640x420 res
-
 - Raspberry Pi:  
-
 '''
 import numpy as np
 import logging
@@ -18,6 +16,9 @@ import time
 
 _SHOW_IMAGE = False
 _ENFORCE_RESOLUTION = True
+
+CAM_WIDTH = 160
+CAM_HEIGHT = 120
 
 class HandCodedLaneFollower(object):
     
@@ -306,8 +307,8 @@ def test_video(video_file):
     
     # lower RESOLUTION for faster processing [https://picamera.readthedocs.io/en/release-1.12/fov.html]
     if _ENFORCE_RESOLUTION:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH,640);
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT,480);
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH,CAM_WIDTH);
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT,CAM_HEIGHT);
 
     # skip first second of video.
     for i in range(3):
